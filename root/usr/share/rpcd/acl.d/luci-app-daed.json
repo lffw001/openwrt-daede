@@ -4,6 +4,10 @@
 		"read": {
 			"file": {
 				"/var/log/daed/daed.log": [ "read" ],
+				"/usr/share/v2ray/geoip.dat": [ "read" ],
+				"/usr/share/v2ray/geosite.dat": [ "read" ],
+				"/sys/kernel/btf/vmlinux": [ "read" ],
+				"/run/netns/daens": [ "read" ],
 				"/etc/init.d/daed status": [ "exec" ]
 			},
 			"ubus": {
