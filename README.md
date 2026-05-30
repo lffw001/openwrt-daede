@@ -89,7 +89,7 @@ wget -O - https://raw.githubusercontent.com/kenzok8/luci-app-daede/refs/heads/ma
 | `kmod-sched-bpf` | eBPF 流量分类 |
 | `kmod-veth` | 虚拟以太网设备 |
 | `kmod-xdp-sockets-diag` | XDP socket 诊断 |
-| `kmod-nft-tproxy` | TPROXY 支持 |
+| `kmod-nft-tproxy` | nftables TPROXY 支持 |
 
 dae / daed 二进制由用户按需安装，luci-app-daede 的 Makefile 会自动拉取对应后端包。
 
