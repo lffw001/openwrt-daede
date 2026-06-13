@@ -81,4 +81,3 @@
 - [ ] Deploy changed files to 252 and clear LuCI caches.
 - [ ] Verify URL conversion, pasted YAML, unsupported-node reporting, dae import plus `dae validate`, and daed authenticated import.
 - [ ] Verify desktop and phone-width screenshots through the LuCI Playwright UI loop.
-
