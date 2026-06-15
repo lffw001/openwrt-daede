@@ -54,7 +54,7 @@
 
 1. **性能优化栈**（相比原版 dae 的核心差异）
    - **dae 核心**：追 [daeuniverse/dae](https://github.com/daeuniverse/dae) 官方 `main`，装配时把 [olicesx](https://github.com/olicesx) 的性能 fork 作基线、官方 main merge 在其上（eBPF 数据面优化：连接状态合并、egress 重定向、DNS/UDP 路径优化等）。核心永远跟官方同步，又保住性能 fork
-   - **QUIC**：官方/daeuniverse 基线 + 我们自持的性能补丁（`ci/patches/quic-go/`，B-tree 节点池等），不再依赖 olicesx 分支
+   - **QUIC**：基线 + 我们自持的性能补丁（`ci/patches/quic-go/`，B-tree 节点池等），复现的 perf tip **正是官方 `daeuniverse/dae` go.mod 自己 pin 的那个**——所以和官方完全同步，不依赖 olicesx 分支存活（`auto-bump` 的告警也改成只在官方 dae 换 quic-go 时才提醒）
    - **出站**：`outbound` 仍用 olicesx 的优化分支（anytls/sticky-ip 等，分叉较大暂骑上游）
    - **PGO**（Profile-Guided Optimization）：内置 `ci/default.pgo` 采样档，`-pgo=auto` 让编译器按真实热点优化
    - **Go 1.26** + `GOEXPERIMENT=newinliner,simd`（新内联器 + SIMD），静态链接、`-trimpath`
@@ -74,7 +74,7 @@
 |------|------|------|
 | **PGO 采样档** | 自采样 | ✅ **已 vendored**（`ci/default.pgo`，完全闭合） |
 | **dae 核心** | daeuniverse/dae `main` + olicesx 性能基线（装配时 merge） | ✅ **追官方 + 保性能**：核心跟官方同步，性能 fork 作冻结基线，不再受 olicesx 滞后影响 |
-| **quic-go** | daeuniverse 基线 + 自持补丁 `ci/patches/quic-go/` | ✅ **完全闭合**：性能补丁自有，olicesx 删库无影响 |
+| **quic-go** | 基线 + 自持补丁 `ci/patches/quic-go/` | ✅ **完全闭合 + 与官方同步**：补丁复现的 perf tip 即官方 dae 所 pin，olicesx 删库无影响 |
 | **outbound** | [olicesx](https://github.com/olicesx) → 镜像 [kenzok8](https://github.com/kenzok8) | ⚠️ **半闭合**：130 commit 大分叉，暂骑上游（已镜像防删） |
 | **真上游** | [daeuniverse/dae](https://github.com/daeuniverse/dae) · [daed](https://github.com/daeuniverse/daed) · dae-wing | 🔗 **主动跟随**（真源头，追它是对的） |
 
