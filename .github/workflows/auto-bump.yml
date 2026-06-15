@@ -36,10 +36,11 @@ jobs:
           wing_new=$(git ls-remote https://github.com/daeuniverse/dae-wing HEAD | cut -f1)
           core_new=$(git ls-remote https://github.com/olicesx/dae kdae | cut -f1)
           outbound_new=$(git ls-remote https://github.com/olicesx/outbound perf/complete-optimizations | cut -f1)
-          quicgo_new=$(git ls-remote https://github.com/olicesx/quic-go perf/node-pooling-v2 | cut -f1)
+          # quic-go is no longer auto-tracked: we own its perf delta as patches in
+          # ci/patches/quic-go and pin only QUICGO_BASE_COMMIT. Refresh deliberately
+          # per ci/PERF-PATCHES.md (the perf-staleness job nudges when it ages).
           if [ "$daed_new" = "$DAED_COMMIT" ] && [ "$wing_new" = "$WING_COMMIT" ] \
-             && [ "$core_new" = "$CORE_COMMIT" ] && [ "$outbound_new" = "$OUTBOUND_COMMIT" ] \
-             && [ "$quicgo_new" = "$QUICGO_COMMIT" ]; then
+             && [ "$core_new" = "$CORE_COMMIT" ] && [ "$outbound_new" = "$OUTBOUND_COMMIT" ]; then
             echo "No upstream change."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -49,7 +50,7 @@ jobs:
           {
             echo "changed=true"
             echo "daed=$daed_new"; echo "wing=$wing_new"; echo "core=$core_new"
-            echo "outbound=$outbound_new"; echo "quicgo=$quicgo_new"
+            echo "outbound=$outbound_new"
             echo "daed_date=$daed_date"; echo "core_date=$core_date"
           } >> "$GITHUB_OUTPUT"
 
@@ -60,7 +61,8 @@ jobs:
         run: |
           gh repo sync kenzok8/dae -b kdae --source olicesx/dae --force
           gh repo sync kenzok8/outbound -b perf/complete-optimizations --source olicesx/outbound --force
-          gh repo sync kenzok8/quic-go -b perf/node-pooling-v2 --source olicesx/quic-go --force
+          # quic-go intentionally NOT synced from olicesx — base is pinned and perf
+          # is applied from ci/patches/quic-go at assemble time.
 
       - name: Stage new pins
         if: steps.detect.outputs.changed == 'true'
@@ -77,7 +79,6 @@ jobs:
             -e "s/^WING_COMMIT=.*/WING_COMMIT=${{ steps.detect.outputs.wing }}/" \
             -e "s/^CORE_COMMIT=.*/CORE_COMMIT=${{ steps.detect.outputs.core }}/" \
             -e "s/^OUTBOUND_COMMIT=.*/OUTBOUND_COMMIT=${{ steps.detect.outputs.outbound }}/" \
-            -e "s/^QUICGO_COMMIT=.*/QUICGO_COMMIT=${{ steps.detect.outputs.quicgo }}/" \
             ci/pins.env
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -130,29 +131,28 @@ jobs:
           set -eu
           . ci/pins.env
           STALE_DAYS=60
-          q_date=$(gh api repos/kenzok8/quic-go/commits/$QUICGO_COMMIT --jq '.commit.committer.date')
+          q_date=$(gh api repos/kenzok8/quic-go/commits/$QUICGO_BASE_COMMIT --jq '.commit.committer.date')
           o_date=$(gh api repos/kenzok8/outbound/commits/$OUTBOUND_COMMIT --jq '.commit.committer.date')
           q_age=$(( ( $(date -u +%s) - $(date -u -d "$q_date" +%s) ) / 86400 ))
           o_age=$(( ( $(date -u +%s) - $(date -u -d "$o_date" +%s) ) / 86400 ))
           up_tag=$(gh api repos/quic-go/quic-go/releases/latest --jq '.tag_name')
           up_date=$(gh api repos/quic-go/quic-go/releases/latest --jq '.published_at' | cut -dT -f1)
-          echo "quic-go perf pin age ${q_age}d ($q_date); outbound ${o_age}d ($o_date); official $up_tag ($up_date)"
+          echo "quic-go base age ${q_age}d ($q_date); outbound ${o_age}d ($o_date); official $up_tag ($up_date)"
           if [ "$q_age" -lt "$STALE_DAYS" ]; then
             echo "fresh (<${STALE_DAYS}d); no alert."
             exit 0
           fi
-          echo "::warning::quic-go perf fork stale ${q_age}d; official quic-go at ${up_tag} (${up_date}). See ci/PERF-PATCHES.md."
-          title="⚠️ Perf fork staleness: quic-go pin ${q_age}d old"
+          echo "::warning::quic-go base stale ${q_age}d; official quic-go at ${up_tag} (${up_date}). See ci/PERF-PATCHES.md."
+          title="⚠️ Perf fork staleness: quic-go base ${q_age}d old"
           body=$(printf '%s\n' \
             "Automated staleness check (auto-bump.yml)." \
             "" \
-            "- quic-go perf pin \`${QUICGO_COMMIT}\` last moved **${q_date}** (${q_age}d ago)" \
+            "- quic-go base \`${QUICGO_BASE_COMMIT}\` (+ ci/patches/quic-go) last moved **${q_date}** (${q_age}d ago)" \
             "- outbound perf pin \`${OUTBOUND_COMMIT}\` last moved **${o_date}** (${o_age}d ago)" \
             "- official quic-go latest release: **${up_tag}** (${up_date})" \
             "" \
-            "The olicesx perf forks have not moved in a while. Decide whether the newer" \
-            "official quic-go carries a fix worth backporting onto enhanced-with-fixes," \
-            "following ci/PERF-PATCHES.md. Heads-up, not an emergency.")
+            "Decide whether the newer official quic-go carries a fix worth backporting" \
+            "onto our quic-go base, following ci/PERF-PATCHES.md. Heads-up, not an emergency.")
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Perf fork staleness in:title" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$existing" ]; then
             gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
