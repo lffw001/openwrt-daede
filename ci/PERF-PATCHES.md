@@ -57,8 +57,14 @@ send_stream.go
 sys_conn_oob.go                        (UDP GSO)
 ```
 
-Because the surface is tiny and self-contained, reapplying these 3 perf commits
-on top of any refreshed `enhanced-with-fixes` is a ~1h job.
+Because the surface is tiny and self-contained, reapplying these commits on top
+of any refreshed base is a ~1h job.
+
+**Archived, self-owned copy:** these 4 commits are stored as reproducible patch
+files in `ci/patches/quic-go/` (verified: `git am` onto base `33005db` rebuilds
+the exact shipped tree, Go 1.26 `go build` clean). So the perf delta survives
+even if the olicesx repo disappears — apply them onto whatever base we maintain.
+See `ci/patches/quic-go/README.md`.
 
 ### outbound
 
