@@ -81,7 +81,7 @@ Expected: FAIL，原因是 reconcileSubscriptionNodes 尚不存在。
     current = existing.Link 仍在 incomingLinks：保留 ID 和组关系
     staleFixed = stale 且至少被一个 policy=fixed 的组引用：subscription_id 置 NULL
     staleNormal = 其余 stale：先 node.AutoUpdateVersionByIds，再删除节点及 group_nodes
-    newLinks = incomingLinks - current.Link：调用 node.Import
+    newLinks = incomingLinks - current.Link：调用 node.Import；任一导入失败则回滚
     finalCount = subscription_id == subID 的节点数；为 0 则返回错误
 
 同一个 stale 节点同时属于 fixed 和普通组时按 staleFixed 处理，保留该节点和全部显式组关系。
@@ -92,7 +92,7 @@ Expected: FAIL，原因是 reconcileSubscriptionNodes 尚不存在。
 
     func ApplyIfRunning(ctx context.Context) error
 
-ApplyIfRunning 用 runLock.Lock() 排队，拿锁后重新检查 System.Running 和 modified；确实需要应用时才开事务调用 runLocked。修改 graphql/mutation.go 和 cmd/run.go，让显式运行与启动恢复都调用新的 config.Run(ctx, dry)，不再由调用方先开事务。所有路径的锁顺序统一为 runLock → DB transaction。
+ApplyIfRunning 用 runLock.Lock() 排队，拿锁后重新检查 System.Running 和 modified；确实需要应用时才开事务调用 runLocked。修改 graphql/mutation.go 和 cmd/run.go，让显式运行与启动恢复都调用新的 config.Run(ctx, dry)，不再由调用方先开事务。所有路径的锁顺序统一为 runLock → DB transaction；dry-run 的提交与回调等待也使用现有超时恢复机制。
 
 - [ ] **Step 4: 订阅提交后自动应用**
 
@@ -101,6 +101,7 @@ UpdateById 的顺序改为：
     links, err := fetchLinks(m.Link)
     subscriptionUpdateMu.Lock()
     tx := db.BeginTx(ctx)
+    在事务内重读并核对订阅地址
     err = reconcileSubscriptionNodes(tx, subID, links)
     err = tx.Model(&m).Update("updated_at", time.Now()).Error
     err = AutoUpdateVersionByIds(tx, []uint{subID})
@@ -109,6 +110,8 @@ UpdateById 的顺序改为：
     err = config.ApplyIfRunning(ctx)
 
 数据库提交失败时不应用。应用失败时数据库更新保留、mutation 返回“订阅已更新但应用失败”，modified 状态继续为 true，下一次可重试。
+
+`UpdateLink` 使用同一个 subscriptionUpdateMu，避免下载完成到提交之间出现“地址已变、节点仍来自旧地址”的错配。LuCI 批量脚本在结束时查询 `running/modified`，只为旧版 daed 或仍待应用的状态补一次 run，不重复 reload，也不在代理停止时误启动。
 
 - [ ] **Step 5: 更新 schema 注释**
 
